@@ -446,44 +446,6 @@ void index_add_kernel_with_stride1_dynamic_v0(Tensor &self, const Tensor &source
 void index_add_kernel_with_stride1_dynamic_v1(torch::Tensor &self, const torch::Tensor &source, int64_t *index_data, 
 											const float alpha, const int64_t &numel,
 											const int64_t &self_stride, const int64_t &source_stride) {
-/*
-	auto start_time1 = system_clock::now();
-	auto self_dim_size = self.size(0);
-
-	omp_lock_t locks[self_dim_size];
-	for (int i = 0; i < self_dim_size; i++)
-		omp_init_lock(&(locks[i]));
-
-	std::vector<std::vector<float*>*> work_list;
-	work_list.resize(self_dim_size);
-	#pragma omp parallel for
-	for (int i = 0; i < self_dim_size; i++) {
-		work_list[i] = new std::vector<float*>();
-		work_list[i]->reserve(numel / self_dim_size);
-	}
-	duration<double, std::milli> diff1 = (system_clock::now() - start_time1);
-	std::cout << "create list elaspsed time: " << diff1.count() << " ms" << std::endl;
-
-	auto start_time2 = system_clock::now();
-	float* source_data_ptr = static_cast<float*>(source.data_ptr());
-	#pragma omp parallel for
-	for (int i = 0; i < numel; i++) {
-		auto idx = index_data[i];
-		omp_set_lock(&(locks[idx]));
-		work_list[idx]->push_back(source_data_ptr + i * source_stride);
-		omp_unset_lock(&(locks[idx]));
-	}
-
-	for (int i = 0; i < self_dim_size; i++)
-		omp_destroy_lock(&(locks[i]));
-
-	duration<double, std::milli> diff2 = (system_clock::now() - start_time2);
-	std::cout << "group row elaspsed time: " << diff2.count() << " ms" << std::endl; 
-
-	#pragma omp parallel for 
-	for (int i = 0; i < self_dim_size; i++)
-		delete(work_list[i]);
-*/
 	auto self_dim = static_cast<int>(self.dim());
 	int self_dim_size = static_cast<int>(self.size(0));
 	auto self_stride1 = self.stride(self_dim - 1);
@@ -504,45 +466,12 @@ void index_add_kernel_with_stride1_dynamic_v1(torch::Tensor &self, const torch::
 	
 	int num_threads_on_row = 1;
 	int num_threads_on_col = 1;
-
-	switch(max_num_threads) {
-		case 2:	{
-			num_threads_on_row = 2;
-			num_threads_on_col = 1;
-		}break;
-		case 4: {
-			num_threads_on_row = 4;
-			num_threads_on_col = 1;
-		}break;
-		case 8: {
-			num_threads_on_row = 8;
-			num_threads_on_col = 1;
-		}break;
-		case 12: {
-			num_threads_on_row = 6;
-			num_threads_on_col = 2;
-		}break;
-		case 24: {
-			num_threads_on_row = 12;
-			num_threads_on_col = 2;
-		}break;
-		case 36: {
-			num_threads_on_row = 12;
-			num_threads_on_col = 3;
-		}break;
-		case 48: {
-			num_threads_on_row = 48;
-			num_threads_on_col = 1;
-		}
-	}
+  	init_num_threads(max_num_threads, num_threads_on_row, num_threads_on_col);
 
 	int chunk_size = divup(self_dim_size, max_num_threads);
 
 	int row_chunk_size = divup(num_rows, num_threads_on_row);
 	int col_chunk_size = divup(num_cols, num_threads_on_col);
-	// int row_chunk_size, col_chunk_size, row_remain_tasks, col_remain_tasks;
-	// partition_tasks(num_rows, num_threads_on_row, row_chunk_size, row_remain_tasks);
-	// partition_tasks(num_cols, num_threads_on_col, col_chunk_size, col_remain_tasks);
 
 	std::vector<int> work_index_list(num_threads_on_row + 1, self_dim_size);
 	work_index_list[0] = 0;
@@ -612,44 +541,6 @@ void index_add_kernel_with_stride1_dynamic_v1(torch::Tensor &self, const torch::
 
 		auto start_time2 = system_clock::now();
 	
-		// #pragma omp single
-		// {
-		// 	for (int i = 0; i < self_dim_size; i++) {
-		// 		if (!(work_list[i]->empty())) {
-		// 			int num_works = num_threads_on_col;
-		// 			int inner_row_begin = 0;
-		// 			int inner_row_end = work_list[i]->size();
-		// 			float *self_data = static_cast<float*>(self.data_ptr()) + i * self_stride;
-		// 			float *source_data = nullptr;
-		// 			for (int j = 0; j < num_threads_on_col; j++) {
-		// 				int outer_col_begin = j * col_chunk_size;
-		// 				int outer_col_end = std::min(num_cols, outer_col_begin + col_chunk_size);
-		// 				#pragma omp task firstprivate(i, inner_row_begin, inner_row_end, outer_col_begin, outer_col_end, self_data)
-		// 				add_slice_with_stride1_dynamic(self_data, source_data, work_list[i], valpha, self_stride1, source_stride1,
-		// 												inner_row_begin, inner_row_end, outer_col_begin, outer_col_end, i);
-		// 			}
-		// 		}
-		// 	}
-		// }
-
-		// #pragma omp for
-		// for (int i = 0; i < self_dim_size; i++) {
-		// 	if (!(work_list[i]->empty())) {
-		// 		int num_works = num_threads_on_col;
-		// 		int inner_row_begin = 0;
-		// 		int inner_row_end = work_list[i]->size();
-		// 		float *self_data = static_cast<float*>(self.data_ptr()) + i * self_stride;
-		// 		float *source_data = nullptr;
-		// 		for (int j = 0; j < num_threads_on_col; j++) {
-		// 			int outer_col_begin = j * col_chunk_size;
-		// 			int outer_col_end = std::min(num_cols, outer_col_begin + col_chunk_size);
-		// 			// #pragma omp task firstprivate(i, inner_row_begin, inner_row_end, outer_col_begin, outer_col_end, self_data)
-		// 			add_slice_with_stride1_dynamic(self_data, source_data, work_list[i], valpha, self_stride1, source_stride1,
-		// 											inner_row_begin, inner_row_end, outer_col_begin, outer_col_end, i);
-		// 		}
-		// 	}
-		// }
-		
 		int outer_row_begin = work_index_list[tid / num_threads_on_col];
 		int outer_row_end = work_index_list[tid / num_threads_on_col + 1];
 		int outer_row_idx = outer_row_begin;
@@ -686,31 +577,6 @@ void index_add_kernel_with_stride1_dynamic_v1(torch::Tensor &self, const torch::
 			// std::cout << "add kernel elaspsed time: " << diff2.count() << " ms" 
 			// 			<< ", bandwidth(GB/s) = " << bandwidth << std::endl;
 		}
-		// while (1) {
-		// 	int inner_row_begin;
-		// 	int row_idx;
-		// 	int inner_row_end;
-		// 	float *self_data;
-		// 	float *source_data = nullptr;
-		// 	int outer_col_begin;
-		// 	int outer_col_end;
-		// 	#pragma omp critical
-		// 	{
-		// 		if (cur_task_id == num_tasks)
-		// 			break;
-		// 		if (!(work_list[cur_task_id / num_threads_on_col]->empty())) {
-		// 			inner_row_begin = 0;
-		// 			row_idx = cur_task_id / num_threads_on_col;
-		// 			inner_row_end = work_list[row_idx]->size();
-		// 			self_data = static_cast<float*>(self.data_ptr()) + row_idx * self_stride;
-		// 			outer_col_begin = cur_task_id % num_threads_on_col;
-		// 			outer_col_end = std::min(num_cols, outer_col_begin + col_chunk_size);
-		// 		}
-		// 		cur_task_id++;
-		// 	}
-			
-		// }
-		// 
 	}
 }
 
@@ -780,7 +646,7 @@ torch::Tensor& index_add(torch::Tensor& self, int64_t dim, const torch::Tensor& 
 				std::cout << "index_add_static elaspsed time: " << diff1.count() << " ms" << std::endl;
 */
 				auto start_time2 = system_clock::now();
-				index_add_kernel_with_stride1_dynamic(self, source, index_data, alpha, numel, self_stride, source_stride);
+				index_add_kernel_with_stride1_dynamic_v1(self, source, index_data, alpha, numel, self_stride, source_stride);
 				duration<double, std::milli> diff2 = (system_clock::now() - start_time2);
 				std::cout << "index_add_dynamic elaspsed time: " << diff2.count() << " ms" << std::endl;
 			}
