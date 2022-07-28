@@ -204,7 +204,11 @@ void index_add_kernel_with_stride1_static(torch::Tensor &self, const torch::Tens
 		case 48: {
 			num_threads_on_row = 48;
 			num_threads_on_col = 1;
-		}
+		}break;
+		default: {
+			num_threads_on_row = max_num_threads;
+			num_threads_on_col = 1;
+		}break;
 	}
 
 
@@ -302,8 +306,8 @@ void init_num_threads(int& max_num_threads, int& num_threads_on_row, int& num_th
 			num_threads_on_col = 1;
 		}break;
 		case 12: {
-			num_threads_on_row = 6;
-			num_threads_on_col = 2;
+			num_threads_on_row = 12;
+			num_threads_on_col = 1;
 		}break;
 		case 24: {
 			num_threads_on_row = 12;
@@ -316,11 +320,15 @@ void init_num_threads(int& max_num_threads, int& num_threads_on_row, int& num_th
 		case 48: {
 			num_threads_on_row = 48;
 			num_threads_on_col = 1;
-		}
+		}break;
+		default: {
+			num_threads_on_row = max_num_threads;
+			num_threads_on_col = 1;
+		}break;
 	}
 }
 
-void index_add_kernel_with_stride1_dynamic_v0(Tensor &self, const Tensor &source, int64_t *index_data, 
+void index_add_kernel_with_stride1_dynamic_v0(torch::Tensor &self, const torch::Tensor &source, int64_t *index_data, 
 											const float alpha, const int64_t &numel,
 											const int64_t &self_stride, const int64_t &source_stride) {
 	int self_dim_size = static_cast<int>(self.size(0));
@@ -667,7 +675,7 @@ torch::Tensor& index_add(torch::Tensor& self, int64_t dim, const torch::Tensor& 
 
 
 
-PYBIND11_MODULE(example_cpp, m) {
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.doc() = "pybind11 example plugin"; // optional module docstring
     m.def("index_add", &index_add, "A function that adds two numbers");
 }
