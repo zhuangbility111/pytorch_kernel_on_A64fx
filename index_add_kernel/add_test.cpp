@@ -352,7 +352,7 @@ void index_add_kernel_with_stride1_dynamic_v0(torch::Tensor &self, const torch::
 	int row_chunk_size = divup(num_rows, num_threads_on_row);
 	int col_chunk_size = divup(num_cols, num_threads_on_col);
 
-	int work_index_list[num_threads_on_row];
+	int work_index_list[num_threads_on_row + 1];
 	svfloat32_t valpha = svdup_f32(alpha);
 
 	#pragma omp parallel
